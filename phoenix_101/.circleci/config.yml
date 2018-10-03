@@ -1,0 +1,134 @@
+defaults: &defaults
+  working_directory: ~/repo
+  docker:
+    - image: shufo/phoenix:1.6.3-development
+
+version: 2
+jobs:
+  checkout_code:
+    <<: *defaults
+    steps:
+      - checkout
+      - save_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-repo-{{ .Environment.CIRCLE_SHA1 }}"
+          paths:
+            - ~/repo
+
+  build_dependencies:
+    <<: *defaults
+    steps:
+      - restore_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-repo-{{ .Environment.CIRCLE_SHA1 }}"
+      - restore_cache:
+          keys:
+            - "{{ .Environment.CACHE_VERSION }}-dependency-cache-{{ checksum \"mix.lock\" }}"
+            - "{{ .Environment.CACHE_VERSION }}-dependency-cache"
+      - restore_cache:
+          keys:
+            - "{{ .Environment.CACHE_VERSION }}-build-cache-{{ .Branch }}"
+            - "{{ .Environment.CACHE_VERSION }}-build-cache"
+
+      - run: mix deps.get
+
+      - save_cache:
+          key: mix-deps-cache-{{ checksum "mix.lock" }}
+          paths:
+            - deps
+
+      - save_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-repo-{{ .Environment.CIRCLE_SHA1 }}"
+          paths:
+            - ~/repo
+
+      - save_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-dependency-cache-{{ checksum \"mix.lock\" }}"
+          paths:
+            - deps
+            - ~/.mix
+
+      - save_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-build-cache-{{ .Branch }}"
+          paths: "_build"
+
+      - save_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-build-cache"
+          paths: "_build"
+
+  compile_assets:
+    <<: *defaults
+    steps:
+      - restore_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-repo-{{ .Environment.CIRCLE_SHA1 }}"
+      - restore_cache:
+          keys:
+            - "{{ .Environment.CACHE_VERSION }}-dependency-cache-{{ checksum \"mix.lock\" }}"
+            - "{{ .Environment.CACHE_VERSION }}-dependency-cache"
+      - restore_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-node-modules-{{ checksum \"assets/package.json\" }}"
+      - attach_workspace:
+          at: ~/repo
+      - restore_cache:
+          keys:
+            - "{{ .Environment.CACHE_VERSION }}-assets-cache-{{ .Branch }}-{{ checksum \"priv/static/cache_manifest.json\" }}"
+            - "{{ .Environment.CACHE_VERSION }}-assets-cache-{{ checksum \"priv/static/cache_manifest.json\" }}"
+            - "{{ .Environment.CACHE_VERSION }}-assets-cache"
+
+      - run:
+          command: |
+            (cd assets && yarn install)
+            (cd assets && ./node_modules/brunch/bin/brunch build --production)
+            mkdir -p priv/static && MIX_ENV=test mix phx.digest
+
+      - save_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-node-modules-{{ checksum \"assets/package.json\" }}"
+          paths:
+            - assets/node_modules
+
+      - save_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-assets-cache-{{ checksum \"priv/static/cache_manifest.json\" }}"
+          paths:
+            - priv/static
+
+  test:
+    docker:
+      - image: shufo/phoenix:1.6.3-development
+        environment:
+          - DB_HOST=127.0.0.1
+      - image: mysql:5.7
+        command: mysqld --character-set-server=utf8mb4 --collation-server=utf8mb4_bin --innodb-large-prefix=true --innodb-file-format=Barracuda
+        environment:
+          - MYSQL_ROOT_PASSWORD=root
+          - MYSQL_USER=testuser
+          - MYSQL_PASSWORD=testpasswd
+          - MYSQL_DATABASE=candee
+    working_directory: ~/repo
+    steps:
+      - restore_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-repo-{{ .Environment.CIRCLE_SHA1 }}"
+      - restore_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-node-modules-{{ checksum \"assets/package.json\" }}"
+      - restore_cache:
+          keys:
+            - "{{ .Environment.CACHE_VERSION }}-dependency-cache-{{ checksum \"mix.lock\" }}"
+            - "{{ .Environment.CACHE_VERSION }}-dependency-cache"
+      - attach_workspace:
+          at: ~/repo
+      - restore_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-assets-cache-{{ checksum \"priv/static/cache_manifest.json\" }}"
+      - run: MIX_ENV=test mix test
+
+workflows:
+  version: 2
+  build-and-test:
+    jobs:
+      - checkout_code
+      - build_dependencies:
+           requires:
+             - checkout_code
+      - compile_assets:
+           requires:
+             - build_dependencies
+      - test:
+           requires:
+             - build_dependencies
+             - compile_assets

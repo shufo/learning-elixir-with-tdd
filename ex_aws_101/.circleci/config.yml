@@ -1,0 +1,96 @@
+defaults: &defaults
+  working_directory: ~/repo
+  docker:
+    - image: elixir:1.6.6
+
+version: 2
+jobs:
+  checkout_code:
+    <<: *defaults
+    steps:
+      - checkout
+      - save_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-repo-{{ .Environment.CIRCLE_SHA1 }}"
+          paths:
+            - ~/repo
+
+  check_formatted:
+    working_directory: ~/repo
+    docker:
+      - image: elixir:1.6.6
+    steps:
+      - restore_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-repo-{{ .Environment.CIRCLE_SHA1 }}"
+      - run: mix format --check-formatted
+
+  build_dependencies:
+    <<: *defaults
+    steps:
+      - restore_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-repo-{{ .Environment.CIRCLE_SHA1 }}"
+      - restore_cache:
+          keys:
+            - "{{ .Environment.CACHE_VERSION }}-dependency-cache-{{ checksum \"mix.lock\" }}"
+            - "{{ .Environment.CACHE_VERSION }}-dependency-cache"
+      - restore_cache:
+          keys:
+            - "{{ .Environment.CACHE_VERSION }}-build-cache-{{ .Branch }}"
+            - "{{ .Environment.CACHE_VERSION }}-build-cache"
+      - run: mix local.hex --force
+      - run: mix deps.get
+
+      - save_cache:
+          key: mix-deps-cache-{{ checksum "mix.lock" }}
+          paths:
+            - deps
+
+      - save_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-repo-{{ .Environment.CIRCLE_SHA1 }}"
+          paths:
+            - ~/repo
+
+      - save_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-dependency-cache-{{ checksum \"mix.lock\" }}"
+          paths:
+            - deps
+            - ~/.mix
+
+      - save_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-build-cache-{{ .Branch }}"
+          paths: "_build"
+
+      - save_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-build-cache"
+          paths: "_build"
+
+  build:
+    docker:
+      - image: elixir:1.6.6
+      - image: localstack/localstack
+    working_directory: ~/repo
+    steps:
+      - restore_cache:
+          key: "{{ .Environment.CACHE_VERSION }}-repo-{{ .Environment.CIRCLE_SHA1 }}"
+      - restore_cache:
+          keys:
+            - "{{ .Environment.CACHE_VERSION }}-dependency-cache-{{ checksum \"mix.lock\" }}"
+            - "{{ .Environment.CACHE_VERSION }}-dependency-cache"
+      - attach_workspace:
+          at: ~/repo
+      - run: mix local.rebar --force
+      - run: mix test
+
+workflows:
+  version: 2
+  build-and-test:
+    jobs:
+      - checkout_code
+      - check_formatted:
+           requires:
+             - checkout_code
+      - build_dependencies:
+           requires:
+             - check_formatted
+      - build:
+           requires:
+             - build_dependencies
