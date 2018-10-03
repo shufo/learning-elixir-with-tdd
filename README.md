@@ -20,7 +20,7 @@ You can learn
 - A basic usage of EEX (templating)
 - How to request external API by [HTTPoison](https://github.com/edgurgel/httpoison)
 
-### [Phoenix 101]()
+### [Phoenix 101](./phoenix_101)
 
 You can learn [Phoenix](https://phoenixframework.org/). The best web framework for Elixir.
 
@@ -33,20 +33,20 @@ Also you can learn
 - How to use tempalte engine (eex)
 - How to interact with MySQL
 
-### [Phoenix API 101]()
+### [Phoenix API 101](./phoenix_api_101)
 
 You can learn
 
 - How to implement API with [JSON-API](http://jsonapi.org/)
 
-### [Elixir with Redis 101]()
+### [Elixir with Redis 101](./ex_redis_101)
 
 You can learn
 
 - How to interact Redis with [redix](https://github.com/whatyouhide/redix)
 - How to implement queueing with [exq](https://github.com/akira/exq)
 
-### [Elixir with AWS 101]()
+### [Elixir with AWS 101](./ex_aws_101)
 
 You can learn
 
