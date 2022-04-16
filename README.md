@@ -57,5 +57,5 @@ You can learn
 Want to learn more? Here is the resources to learn elixir.
 
 - [Programming Elixir](https://pragprog.com/book/elixir16/programming-elixir-1-6)
-- [Elixir Forun](https://elixirforum.com/)
+- [Elixir Forum](https://elixirforum.com/)
 - [Subreddit for Elixir](https://www.reddit.com/r/elixir/)
